@@ -6,9 +6,10 @@ from functools import wraps
 from rich.console import Console
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-load_dotenv(".env.enterprise", override=False)
+# Load environment variables — use absolute path so CWD doesn't matter.
+_env_dir = Path(__file__).resolve().parent.parent  # TradingAgents repo root
+load_dotenv(_env_dir / ".env")
+load_dotenv(_env_dir / ".env.enterprise", override=False)
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.live import Live
@@ -1155,6 +1156,16 @@ def run_analysis(checkpoint: bool = False):
         # Get final state and decision
         final_state = trace[-1]
         decision = graph.process_signal(final_state["final_trade_decision"])
+
+        # Write JSON state log and memory log so the MT5 bridge engine can detect it.
+        graph.curr_state = final_state
+        graph.ticker = selections["ticker"]
+        graph._log_state(selections["analysis_date"], final_state)
+        graph.memory_log.store_decision(
+            ticker=selections["ticker"],
+            trade_date=selections["analysis_date"],
+            final_trade_decision=final_state["final_trade_decision"],
+        )
 
         # Update all agent statuses to completed
         for agent in message_buffer.agent_status:
