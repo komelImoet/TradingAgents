@@ -32,14 +32,14 @@ flowchart TB
 ## Usage
 
 ```bash
-# Run scheduler with default settings (08:00 UTC, tickers: NVDA,AAPL,SPY)
+# Run scheduler every 3 hours (default)
 python main.py schedule
 
-# Custom tickers and time
-python main.py schedule --tickers AAPL,MSFT,GOOGL --hour 9 --minute 30
+# Custom tickers and interval
+python main.py schedule --tickers AAPL,MSFT,GOOGL --interval 2
 
 # Run as background daemon (Unix only)
-python main.py schedule -D --tickers AAPL,NVDA,MSFT
+python main.py schedule -D --tickers AAPL,NVDA,MSFT --interval 3
 
 # With Docker
 docker compose up -d jatayucore
@@ -47,17 +47,21 @@ docker compose up -d jatayucore
 
 ## Features
 
-### Weekend Skip
-Scheduler otomatis skip kalo hari Sabtu/Minggu — gak buang-buang API calls.
+### Interval Mode
+Default tiap **3 jam** (bisa diubah pake `--interval`). Skip otomatis kalo Sabtu/Minggu.
+
+### Circuit Breaker
+Kalo **Stop Loss kena 2 kali dalam sehari**, bot berhenti trading otomatis — kirim notif ke Telegram "⛔ TRADING HALTED". Reset otomatis besoknya.
 
 ### Daemon Mode
-`-D` flag fork proses ke background. PID baru, stdin/stdout/stderr nutup. Cocok buat di VPS pake `nohup` atau `systemd`.
+`-D` flag fork proses ke background. Cocok buat di VPS atau systemd.
 
 ### Background Monitor
 Bersamaan scheduler jalan, **PositionMonitor** aktif di thread terpisah:
 | Monitor | Interval | Fungsi |
 |---------|----------|--------|
 | Stop Loss | 60 detik | Cek harga, auto close kalo turun 5% |
+| Circuit Breaker | bareng SL | Stop trading kalo SL kena 2× |
 | Position Summary | 1 jam | Kirim P&L tiap posisi ke Telegram |
 | Heartbeat | 2 jam | Kirim "masih hidup" + equity |
 | Daily P&L | 1x/hari | Rekap portfolio |
@@ -67,8 +71,7 @@ Bersamaan scheduler jalan, **PositionMonitor** aktif di thread terpisah:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--tickers`, `-t` | `NVDA,AAPL,SPY` | Comma-separated stock symbols |
-| `--hour` | `8` | Hour to run (UTC, 0-23) |
-| `--minute` | `0` | Minute to run (0-59) |
+| `--interval` | `3` | Hours between runs |
 | `--daemon`, `-D` | `false` | Fork ke background |
 
 ## What Happens Each Run

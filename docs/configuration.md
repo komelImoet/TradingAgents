@@ -113,7 +113,6 @@ python main.py schedule [OPTIONS]
 
 Options:
   --tickers, -t STRING    Comma-separated tickers (default: NVDA,AAPL,SPY)
-  --hour INT              Run hour UTC (default: 8)
-  --minute INT            Run minute UTC (default: 0)
+  --interval INT          Hours between runs (default: 3)
   --daemon, -D            Fork to background (Unix only)
 ```

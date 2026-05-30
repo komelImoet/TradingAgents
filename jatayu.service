@@ -8,7 +8,8 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/root/TradingAgents
-ExecStart=/root/TradingAgents/.venv/bin/python main.py schedule --tickers AAPL,NVDA,MSFT
+ExecStart=/root/TradingAgents/.venv/bin/python main.py schedule --tickers AAPL,NVDA,MSFT --interval 3
+Environment=HOME=/root
 Restart=on-failure
 RestartSec=30
 

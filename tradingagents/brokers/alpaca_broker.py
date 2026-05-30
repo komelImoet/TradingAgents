@@ -68,11 +68,13 @@ class AlpacaBroker:
         secret_key: str | None = None,
         paper: bool = True,
         notifier=None,
+        circuit_breaker=None,
     ):
         self.api_key = api_key or os.getenv("ALPACA_API_KEY", "")
         self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY", "")
         self.paper = paper
         self.notifier = notifier
+        self.circuit_breaker = circuit_breaker
 
         if not self.api_key or not self.secret_key:
             logger.warning("ALPACA_API_KEY or ALPACA_SECRET_KEY not set — broker disabled")
@@ -127,6 +129,15 @@ class AlpacaBroker:
 
     def send_decision(self, state: dict[str, Any]) -> bool:
         if not self.enabled:
+            return False
+
+        if self.circuit_breaker and self.circuit_breaker.is_triggered():
+            logger.warning("CircuitBreaker active — skipping trade")
+            if self.notifier:
+                self.notifier._send(
+                    f"<b>Alpaca Skip</b>\n━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>Reason:</b> Circuit breaker active — max SL hit today"
+                )
             return False
 
         ticker = state.get("company_of_interest", "")

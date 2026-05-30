@@ -76,8 +76,7 @@ def cmd_scheduler(args: argparse.Namespace) -> None:
     scheduler = TradingScheduler(
         tickers=tickers,
         config=config,
-        run_hour=args.hour,
-        run_minute=args.minute,
+        interval_hours=args.interval,
     )
     scheduler.start()
 
@@ -96,8 +95,7 @@ def main() -> None:
     # Scheduler
     sched_p = sub.add_parser("schedule", help="Run scheduler daemon")
     sched_p.add_argument("--tickers", "-t", help="Comma-separated tickers")
-    sched_p.add_argument("--hour", type=int, default=8, help="Run hour (UTC)")
-    sched_p.add_argument("--minute", type=int, default=0, help="Run minute (UTC)")
+    sched_p.add_argument("--interval", type=int, default=3, help="Hours between runs (default: 3)")
     sched_p.add_argument("--daemon", "-D", action="store_true", help="Fork to background")
     sched_p.set_defaults(func=cmd_scheduler)
 

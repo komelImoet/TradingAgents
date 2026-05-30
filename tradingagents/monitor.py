@@ -4,6 +4,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from tradingagents.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,12 +19,14 @@ class PositionMonitor:
         self,
         broker,
         notifier,
+        circuit_breaker: CircuitBreaker | None = None,
         sl_check_interval: int = 60,
         summary_interval: int = 3600,
         heartbeat_interval: int = 7200,
     ):
         self.broker = broker
         self.notifier = notifier
+        self.circuit_breaker = circuit_breaker
         self.sl_check_interval = sl_check_interval
         self.summary_interval = summary_interval
         self.heartbeat_interval = heartbeat_interval
@@ -97,6 +101,19 @@ class PositionMonitor:
                             f"<b>Current:</b> ${current:.2f}\n"
                             f"<b>Loss:</b> {((current - avg_entry) / avg_entry * 100):.1f}%"
                         )
+
+                    if self.circuit_breaker:
+                        tripped = self.circuit_breaker.register_sl()
+                        remaining = self.circuit_breaker.remaining()
+                        if self.notifier:
+                            cnt = self.circuit_breaker.sl_count()
+                            self.notifier._send(
+                                f"<b>Circuit Breaker</b>\n"
+                                f"━━━━━━━━━━━━━━━━━━\n"
+                                f"🔴 SL #{cnt} recorded today\n"
+                                f"⏳ Remaining SL allowance: {remaining}\n"
+                                f"{'⛔ TRADING HALTED — max SL reached' if tripped else '✅ Trading continues'}"
+                            )
                 except Exception as e:
                     logger.error("SL close failed for %s: %s", ticker, e)
         return
