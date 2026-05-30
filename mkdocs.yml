@@ -1,0 +1,59 @@
+site_name: TradingAgents
+site_description: Multi-Agent LLM Financial Trading Framework with MT5 execution & Telegram alerts
+site_url: https://komelimoet.github.io/TradingAgents
+repo_url: https://github.com/komelImoet/TradingAgents
+repo_name: komelImoet/TradingAgents
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Getting Started:
+    - Installation: setup.md
+    - Configuration: configuration.md
+  - Features:
+    - Telegram Notifications: telegram.md
+    - Scheduler: scheduler.md
+    - MT5 Execution Engine: mt5-engine.md
+  - Deployment:
+    - Docker: docker.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/komelImoet/TradingAgents
