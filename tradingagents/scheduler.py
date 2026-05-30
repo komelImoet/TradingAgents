@@ -6,10 +6,17 @@ from typing import Optional
 
 from tradingagents.brokers.alpaca_broker import AlpacaBroker
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.monitor import PositionMonitor
 from tradingagents.notifiers.telegram_notifier import TelegramNotifier
 from tradingagents.default_config import DEFAULT_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+def _is_market_open() -> bool:
+    """Return False on weekends — basic market hours gate."""
+    now = datetime.now(timezone.utc)
+    return now.weekday() < 5  # Mon=0 .. Fri=4
 
 
 class TradingScheduler:
@@ -29,10 +36,18 @@ class TradingScheduler:
 
         self.notifier = TelegramNotifier()
         self.broker = AlpacaBroker(notifier=self.notifier if self.notifier.enabled else None)
+        self.monitor = PositionMonitor(
+            broker=self.broker,
+            notifier=self.notifier,
+        )
         self.last_run_date = None
         self._running = False
 
     def _should_run(self) -> bool:
+        if not _is_market_open():
+            logger.info("Market closed today (weekend) — skipping scheduled run")
+            return False
+
         now = datetime.now(timezone.utc)
         today = now.date()
 
@@ -79,6 +94,8 @@ class TradingScheduler:
 
     def start(self) -> None:
         self._running = True
+
+        self.monitor.start()
         self.notifier.send_health("Scheduler started")
 
         logger.info(
@@ -96,5 +113,6 @@ class TradingScheduler:
 
     def stop(self) -> None:
         self._running = False
+        self.monitor.stop()
         self.notifier.send_health("Scheduler stopped")
         logger.info("Scheduler stopped")
