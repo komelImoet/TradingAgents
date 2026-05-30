@@ -88,6 +88,11 @@ class TradingScheduler:
             f"Run completed. Next run ~{next_run.strftime('%H:%M UTC')} "
             f"({self.interval_hrs_summary()})",
         )
+        journal = getattr(self.broker, "journal", None)
+        if journal and journal.stats["total_trades"] > 0:
+            self.notifier._send(journal.summary_text())
+        else:
+            self.notifier.send_info("TradeJournal", "No closed trades yet")
 
     def interval_hrs_summary(self) -> str:
         h = self.interval_hours

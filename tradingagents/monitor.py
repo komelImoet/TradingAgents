@@ -23,6 +23,7 @@ class PositionMonitor:
         sl_check_interval: int = 60,
         summary_interval: int = 3600,
         heartbeat_interval: int = 7200,
+        performance_interval: int = 14400,
     ):
         self.broker = broker
         self.notifier = notifier
@@ -30,9 +31,11 @@ class PositionMonitor:
         self.sl_check_interval = sl_check_interval
         self.summary_interval = summary_interval
         self.heartbeat_interval = heartbeat_interval
+        self.performance_interval = performance_interval
         self._stop = threading.Event()
         self._last_summary = 0.0
         self._last_heartbeat = 0.0
+        self._last_performance = 0.0
         self._daily_report_date = None
         self._thread: threading.Thread | None = None
 
@@ -60,6 +63,7 @@ class PositionMonitor:
             try:
                 self._check_stop_loss()
                 self._check_summary(now)
+                self._check_performance(now)
                 self._check_heartbeat(now)
                 self._check_daily_report()
             except Exception as e:
@@ -92,6 +96,9 @@ class PositionMonitor:
                 )
                 try:
                     self.broker.client.close_position(ticker)
+                    journal = getattr(self.broker, "journal", None)
+                    if journal:
+                        journal.record_exit(ticker, current, reason="stop_loss")
                     if self.notifier:
                         self.notifier._send(
                             f"<b>Stop Loss Triggered</b>\n"
@@ -148,6 +155,18 @@ class PositionMonitor:
         except Exception as e:
             logger.warning("PositionMonitor: heartbeat failed: %s", e)
 
+    def _check_performance(self, now: float):
+        if now - self._last_performance < self.performance_interval:
+            return
+        self._last_performance = now
+
+        try:
+            journal = getattr(self.broker, "journal", None)
+            if journal and self.notifier:
+                self.notifier._send(journal.summary_text())
+        except Exception as e:
+            logger.warning("PositionMonitor: performance report failed: %s", e)
+
     def _check_daily_report(self):
         today = datetime.now(timezone.utc).date()
         if self._daily_report_date == today:
@@ -156,14 +175,26 @@ class PositionMonitor:
 
         try:
             info = self.broker.account_info()
+            journal = getattr(self.broker, "journal", None)
+            lines = [
+                f"<b>Daily P&L Report</b>",
+                f"━━━━━━━━━━━━━━━━━━",
+                f"📅 <b>Date:</b> {today}",
+                f"💰 <b>Equity:</b> ${info['equity']:.2f}",
+                f"💵 <b>Cash:</b> ${info['cash']:.2f}",
+                f"⚡ <b>Buying Power:</b> ${info['buying_power']:.2f}",
+            ]
+            if journal:
+                s = journal.stats
+                lines += [
+                    "",
+                    f"<b>Performance</b>",
+                    f"📊 <b>Trades:</b> {s['total_trades']} | "
+                    f"{'🟢' if s['win_rate'] >= 50 else '🔴'} WR: {s['win_rate']:.1f}%",
+                    f"💰 <b>P&L:</b> ${s['total_pnl']:.2f} | "
+                    f"⬇️ <b>DD:</b> {s['max_drawdown_pct']:.1f}%",
+                ]
             if self.notifier:
-                self.notifier._send(
-                    f"<b>Daily P&L Report</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━\n"
-                    f"📅 <b>Date:</b> {today}\n"
-                    f"💰 <b>Equity:</b> ${info['equity']:.2f}\n"
-                    f"💵 <b>Cash:</b> ${info['cash']:.2f}\n"
-                    f"⚡ <b>Buying Power:</b> ${info['buying_power']:.2f}"
-                )
+                self.notifier._send("\n".join(lines))
         except Exception as e:
             logger.warning("PositionMonitor: daily report failed: %s", e)

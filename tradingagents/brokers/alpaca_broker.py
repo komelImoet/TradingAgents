@@ -4,9 +4,11 @@ import re
 from typing import Any
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from dotenv import load_dotenv
+
+from tradingagents.trade_journal import TradeJournal
 
 load_dotenv()
 
@@ -69,12 +71,16 @@ class AlpacaBroker:
         paper: bool = True,
         notifier=None,
         circuit_breaker=None,
+        trade_journal: TradeJournal | None = None,
+        slippage_bps: int = 5,
     ):
         self.api_key = api_key or os.getenv("ALPACA_API_KEY", "")
         self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY", "")
         self.paper = paper
         self.notifier = notifier
         self.circuit_breaker = circuit_breaker
+        self.journal = trade_journal or TradeJournal()
+        self.slippage_bps = slippage_bps
 
         if not self.api_key or not self.secret_key:
             logger.warning("ALPACA_API_KEY or ALPACA_SECRET_KEY not set — broker disabled")
@@ -182,15 +188,37 @@ class AlpacaBroker:
 
         return False
 
+    def _get_current_price(self, ticker: str) -> float | None:
+        try:
+            trade = self.client.get_latest_trade(ticker)
+            return float(trade.price)
+        except Exception as e:
+            logger.warning("Cannot fetch price for %s: %s", ticker, e)
+            return None
+
     def _place_order(self, ticker: str, qty: int, side: OrderSide) -> bool:
         try:
-            order_req = MarketOrderRequest(
+            price = self._get_current_price(ticker)
+            if price is None:
+                logger.error("Alpaca: no price for %s — cannot place limit order", ticker)
+                return False
+
+            if side == OrderSide.BUY:
+                limit_price = round(price * (1 + self.slippage_bps / 10000), 2)
+            else:
+                limit_price = round(price * (1 - self.slippage_bps / 10000), 2)
+
+            order_req = LimitOrderRequest(
                 symbol=ticker,
                 qty=qty,
                 side=side,
+                limit_price=limit_price,
                 time_in_force=TimeInForce.DAY,
             )
             order = self.client.submit_order(order_req)
+            fill_price = float(order.filled_avg_price or limit_price)
+            self.journal.record_entry(ticker, side.name.lower(), qty, fill_price, order.id)
+
             side_icon = "🟢" if side == OrderSide.BUY else "🔴"
             msg = (
                 f"<b>Alpaca Order Placed</b>\n"
@@ -198,11 +226,13 @@ class AlpacaBroker:
                 f"{side_icon} <b>Side:</b> {side.name}\n"
                 f"<b>Ticker:</b> {ticker}\n"
                 f"<b>Qty:</b> {qty}\n"
+                f"<b>Limit:</b> ${limit_price:.2f}\n"
+                f"<b>Fill:</b> ${fill_price:.2f}\n"
                 f"<b>Order:</b> #{order.id}"
             )
             if self.notifier:
                 self.notifier._send(msg)
-            logger.info("Alpaca: %s %d × %s → order #%s", side.name, qty, ticker, order.id)
+            logger.info("Alpaca: %s %d × %s → order #%s @ %.2f", side.name, qty, ticker, order.id, fill_price)
             return True
         except Exception as e:
             logger.error("Alpaca order failed for %s: %s", ticker, e)
@@ -212,16 +242,26 @@ class AlpacaBroker:
 
     def _close_and_notify(self, ticker: str) -> bool:
         try:
-            self.client.close_position(ticker)
+            orders = self.client.close_position(ticker)
+            fill_price = None
+            if orders:
+                order = orders[0] if isinstance(orders, list) else orders
+                fill_price = float(getattr(order, "filled_avg_price", 0) or 0)
+            if fill_price and fill_price > 0:
+                self.journal.record_exit(ticker, fill_price, reason="signal")
+            else:
+                price = self._get_current_price(ticker) or 0
+                self.journal.record_exit(ticker, price, reason="signal")
             msg = (
                 f"<b>Alpaca Position Closed</b>\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"🔴 <b>Ticker:</b> {ticker}\n"
+                f"<b>Fill:</b> ${fill_price:.2f}\n"
                 f"<b>Reason:</b> Sell/Underweight signal"
             )
             if self.notifier:
                 self.notifier._send(msg)
-            logger.info("Alpaca: closed %s", ticker)
+            logger.info("Alpaca: closed %s @ %.2f", ticker, fill_price or 0)
             return True
         except Exception as e:
             logger.error("Alpaca close failed for %s: %s", ticker, e)
