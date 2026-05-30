@@ -1158,6 +1158,7 @@ def run_analysis(checkpoint: bool = False):
         decision = graph.process_signal(final_state["final_trade_decision"])
 
         # Write JSON state log and memory log so the MT5 bridge engine can detect it.
+        # (These are normally called by graph.propagate(), but the CLI streams manually.)
         graph.curr_state = final_state
         graph.ticker = selections["ticker"]
         graph._log_state(selections["analysis_date"], final_state)

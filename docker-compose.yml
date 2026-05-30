@@ -5,8 +5,24 @@ services:
       - .env
     volumes:
       - tradingagents_data:/home/appuser/.tradingagents
+    command: python main.py schedule --tickers "${TICKERS:-NVDA,AAPL,SPY}"
+    restart: unless-stopped
     tty: true
     stdin_open: true
+
+  mt5-engine:
+    build:
+      context: ./mt5-execution-engine
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    volumes:
+      - tradingagents_data:/home/appuser/.tradingagents
+    restart: unless-stopped
+    network_mode: "host"
 
   ollama:
     image: ollama/ollama:latest
@@ -25,6 +41,8 @@ services:
       - tradingagents_data:/home/appuser/.tradingagents
     depends_on:
       - ollama
+    command: python main.py schedule --tickers "${TICKERS:-NVDA,AAPL,SPY}"
+    restart: unless-stopped
     tty: true
     stdin_open: true
     profiles:

@@ -37,6 +37,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_insider_transactions,
     get_global_news
 )
+from tradingagents.notifiers.telegram_notifier import TelegramNotifier
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
@@ -55,6 +56,7 @@ class TradingAgentsGraph:
         debug=False,
         config: Dict[str, Any] = None,
         callbacks: Optional[List] = None,
+        notifiers: Optional[List[TelegramNotifier]] = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -63,10 +65,12 @@ class TradingAgentsGraph:
             debug: Whether to run in debug mode
             config: Configuration dictionary. If None, uses default config
             callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
+            notifiers: Optional list of notifiers to call after each propagation
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
+        self.notifiers = notifiers or []
 
         # Update the interface's config
         set_config(self.config)
@@ -343,6 +347,14 @@ class TradingAgentsGraph:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date)
             )
+
+        # Notify all registered notifiers
+        state_dict = self.log_states_dict.get(str(trade_date), final_state)
+        for nt in self.notifiers:
+            try:
+                nt.send_decision(state_dict)
+            except Exception as e:
+                logger.warning("Notifier failed: %s", e)
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
 

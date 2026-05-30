@@ -217,6 +217,12 @@ __marimo__/
 
 # Cache
 **/data_cache/
-reports/
+
+# Secrets
 .env
+
+# Generated reports
+reports/
+
+# Separate git repo — MT5 execution engine
 mt5-execution-engine/
