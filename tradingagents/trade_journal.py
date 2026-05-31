@@ -85,7 +85,6 @@ class TradeJournal:
     def open_count(self) -> int:
         return sum(1 for t in self._data["trades"] if t["status"] == "open")
 
-    @property
     def recent_trades(self, n: int = 10) -> list:
         closed = [t for t in self._data["trades"] if t["status"] == "closed"]
         return closed[-n:]
